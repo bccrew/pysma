@@ -34,7 +34,11 @@ It is possible to get around this by using a
 [utility meter](https://www.home-assistant.io/components/utility_meter)
 
 
-This is a table of instantaneous values that are presented by the Sunny Boy 4.0 AV-41.
+Sunny Boy 4.0 AV-41 (probably all AV-41 models)
+===============================================
+
+Listed below is a table representing all instantaneous values that are currently offered by the Sunny Boy 4.0 AV-41. 
+This way, you can add your own sensors in the __init.py__ file after you installed the pysma library.
 
 | **Sensor** | **Value** | **Json** |
 | --- | --- | --- |

@@ -10,6 +10,9 @@ import aiohttp
 
 import pysma
 
+from configparser import ConfigParser
+import myMQTT as mq
+
 # This module will work with Python 3.5+
 # Python 3.4+ "@asyncio.coroutine" decorator
 # Python 3.5+ uses "async def f()" syntax
@@ -27,9 +30,23 @@ def print_table(sensors):
             print("{:>25}{:>15} {}".format(sen.name, str(sen.value), sen.unit))
 
 
+def send_table(sensors):
+    global client, config
+    for sen in sensors:
+        if sen.value is None:
+            client.publish('%s/%s' % (config.get('main', 'prefix'), sen.name),
+                           'None')
+        else:
+            client.publish(
+                '%s/%s_%s' %
+                (config.get('main', 'prefix'), sen.name, sen.unit),
+                str(sen.value))
+
+
 async def main_loop(loop, password, user, ip):  # pylint: disable=invalid-name
     """Main loop."""
-    async with aiohttp.ClientSession(loop=loop, connector=aiohttp.TCPConnector(ssl=False)) as session:
+    async with aiohttp.ClientSession(
+            loop=loop, connector=aiohttp.TCPConnector(ssl=False)) as session:
         VAR["sma"] = pysma.SMA(session, ip, password=password, group=user)
         await VAR["sma"].new_session()
         if VAR["sma"].sma_sid is None:
@@ -44,6 +61,7 @@ async def main_loop(loop, password, user, ip):  # pylint: disable=invalid-name
         while VAR.get("running"):
             await VAR["sma"].read(sensors)
             print_table(sensors)
+            send_table(sensors)
             cnt -= 1
             if cnt == 0:
                 break
@@ -56,12 +74,16 @@ def main():
     """Main example."""
     logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
-    parser = argparse.ArgumentParser(description="Test the SMA webconnect library.")
-    parser.add_argument("ip", type=str, help="IP address of the Webconnect module")
+    parser = argparse.ArgumentParser(
+        description="Test the SMA webconnect library.")
+    parser.add_argument("ip",
+                        type=str,
+                        help="IP address of the Webconnect module")
     parser.add_argument("user", help="installer/user")
     parser.add_argument("password", help="Installer password")
 
     args = parser.parse_args()
+
 
     loop = asyncio.get_event_loop()
 
@@ -73,9 +95,13 @@ def main():
     # loop.add_signal_handler(signal.SIGINT, shutdown)
     # signal.signal(signal.SIGINT, signal.SIG_DFL)
     loop.run_until_complete(
-        main_loop(loop, user=args.user, password=args.password, ip=args.ip)
-    )
+        main_loop(loop, user=args.user, password=args.password, ip=args.ip))
 
+config = ConfigParser()
+config.read('mqtt.ini')
+
+client = mq.myMQTT()
+client.run(addr=config.get('main', 'mqtt_ip'))
 
 if __name__ == "__main__":
     main()

@@ -10,7 +10,7 @@ by Johann Kellerman to integrate SMA with HomeAssistant.
 See <http://www.sma-solar.com> for more information on the SMA solar
 inverters
 
-This fork aims to document my own invertor, the Sunny Boy 4.0 AV-41. It has webconnect 1.5 and uses a self signed-sll certificate.
+This fork aims to document my own invertor, the Sunny Boy 4.0 AV-41. It has webconnect 1.5 and uses a self signed-ssl certificate. It can send output to any MQTT broker.
 
 Example usage
 =============

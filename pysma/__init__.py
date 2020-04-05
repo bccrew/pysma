@@ -102,23 +102,23 @@ class Sensors(object):
                 (
                     # AC side - Grid measurements
                     Sensor("6100_40263F00", "grid_power", "W"),
-                    Sensor("6100_00465700", "frequency", "Hz", 100),
-                    Sensor("6100_00464800", "voltage_l1", "V", 100),
-                    Sensor("6100_00464900", "voltage_l2", "V", 100),
-                    Sensor("6100_00464A00", "voltage_l3", "V", 100),
+                    #Sensor("6100_00465700", "frequency", "Hz", 100),
+                    #Sensor("6100_00464800", "voltage_l1", "V", 100),
+                    #Sensor("6100_00464900", "voltage_l2", "V", 100),
+                    #Sensor("6100_00464A00", "voltage_l3", "V", 100),
                     # AC side - PV Generation
-                    Sensor("6100_0046C200", "pv_power", "W"),
-                    Sensor("6400_0046C300", "pv_gen_meter", "kWh", 1000),
+                    #Sensor("6100_0046C200", "pv_power", "W"),
+                    #Sensor("6400_0046C300", "pv_gen_meter", "kWh", 1000),
                     Sensor("6400_00260100", "total_yield", "kWh", 1000),
-                    Sensor("6400_00262200", "daily_yield", "Wh"),
+                    #Sensor("6400_00262200", "daily_yield", "Wh"),
                     # AC side - Measured values - Grid measurements
-                    Sensor("6100_40463600", "grid_power_supplied", "W"),
-                    Sensor("6100_40463700", "grid_power_absorbed", "W"),
-                    Sensor("6400_00462400", "grid_total_yield", "kWh", 1000),
-                    Sensor("6400_00462500", "grid_total_absorbed", "kWh", 1000),
+                    #Sensor("6100_40463600", "grid_power_supplied", "W"),
+                    #Sensor("6100_40463700", "grid_power_absorbed", "W"),
+                    #Sensor("6400_00462400", "grid_total_yield", "kWh", 1000),
+                    #Sensor("6400_00462500", "grid_total_absorbed", "kWh", 1000),
                     # Consumption = Energy from the PV system and grid
-                    Sensor("6100_00543100", "current_consumption", "W"),
-                    Sensor("6400_00543A00", "total_consumption", "kWh", 1000),
+                    #Sensor("6100_00543100", "current_consumption", "W"),
+                    #Sensor("6400_00543A00", "total_consumption", "kWh", 1000),
                     # General
                     Sensor(
                         "6180_08214800",
@@ -219,13 +219,14 @@ class SMA:
         if self.sma_sid:
             return True
 
+        err = body.pop("err", None)
         msg = "Could not start session, %s, got {}".format(body)
 
-        if body.get("err"):
-            if body.get("err") == 503:
-                _LOGGER.error("Max amount of sessions reached")
+        if err:
+            if err == 503:
+                _LOGGER.error(msg, "Max amount of sessions reached")
             else:
-                _LOGGER.error(msg, body.get("err"))
+                _LOGGER.error(msg, err)
         else:
             _LOGGER.error(msg, "Session ID expected [result.sid]")
         return False
@@ -250,21 +251,20 @@ class SMA:
                 return False
         body = yield from self._fetch_json(URL_VALUES, payload=payload)
 
-        # On the first 401 error we close the session which will re-login
-        if body.get("err") == 401:
+		# On the first error we close the session which will re-login
+        err = body.get("err")
+        if err is not None:
             _LOGGER.warning(
-                "401 error detected, closing session to force " "another login attempt"
+                "%s: error detected, closing session to force another login attempt, got: %s",
+                self._url,
+                body,
             )
-            self.close_session()
-            return False
-
-        if not isinstance(body, dict) or "result" not in body:
-            _LOGGER.warning("No 'result' in reply from SMA, got: %s", body)
+            yield from self.close_session()
             return False
 
         if self.sma_uid is None:
             # Get the unique ID
-            self.sma_uid = next(iter(body["result"].keys()))
+            self.sma_uid = next(iter(body["result"].keys()), None)
 
         result_body = body["result"].pop(self.sma_uid, None)
 
@@ -275,8 +275,19 @@ class SMA:
                 json.dumps(result_body),
             )
 
+        notfound = []
         for sen in sensors:
-            if sen.extract_value(result_body):
-                _LOGGER.debug("%s\t= %s %s", sen.name, sen.value, sen.unit)
+            if sen.key in result_body:
+                sen.extract_value(result_body)
+                continue
+
+            notfound.append(f"{sen.name} [{sen.key}]")
+
+        if notfound:
+            _LOGGER.warning(
+                "No values for sensors: %s. Response from inverter: %s",
+                ",".join(notfound),
+                result_body,
+            )
 
         return True
